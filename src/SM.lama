@@ -26,8 +26,27 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (c@[stack, state, world], insns) {
+  case insns of 
+     {} -> c
+   | ins:tail -> 
+      case ins of
+        READ       -> (
+          var newWorld = readWorld(world);
+          eval([newWorld.fst:stack, state, newWorld.snd], tail)
+        )
+      | WRITE      -> eval([stack.tl, state, writeWorld(stack.hd, world)], tail)
+      | BINOP (op) -> (
+          var x = stack.hd;
+          var y = stack.tl.hd;
+          eval([evalBinOp(op, y, x):stack.tl.tl, state, world], tail)
+        )
+      | LD    (x)  -> eval([state(x):stack, state, world], tail)
+      | ST    (x)  -> eval([stack.tl, state <- [x, stack.hd], world], tail)
+      | CONST (n)  -> eval([n:stack, state, world], tail)
+      esac
+
+   esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -38,12 +57,23 @@ public fun evalSM (input, insns) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+      Var (variable) -> {LD (variable)}
+    | Const (const) -> {CONST (const)}
+    | Binop (op, expr1, expr2) -> compileExpr(expr1) +++ compileExpr(expr2) +++ {BINOP (op)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
--- instructions.
+-- instructions. при конкатенации квадратичная асимптотика. можно вернуть не +++, а {x, y}/ deepFlatten 
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Skip -> {}
+    | Assn (name, expr) -> compileExpr(expr) +++ {ST (name)}
+    | Seq (stmt1, stmt2) -> compileSM(stmt1) +++ compileSM(stmt2)
+    | Read (name) -> {READ, ST (name)}
+    | Write (expr) -> compileExpr(expr) +++ {WRITE}
+  esac
+
 }
